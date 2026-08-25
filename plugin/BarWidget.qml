@@ -37,8 +37,14 @@ BarWidget {
   readonly property bool running: winAddress !== ""
   readonly property bool hidden: running && winWorkspace.indexOf("special:") === 0
 
+  // Forces a count so the badge can be looked at on demand. Otherwise the only
+  // way to see it is to wait for somebody to message you, which is how it went
+  // unverified for so long. `omarchy bar set fvargas.teams debugUnread 3`.
+  readonly property int debugUnread: Math.max(0, Number(setting("debugUnread", 0)))
+
   // Teams puts the unread count at the head of the title: "(3) Chat | ..."
   readonly property int unread: {
+    if (root.debugUnread > 0) return root.debugUnread
     var m = /^\((\d+)\)/.exec(root.winTitle)
     return m ? parseInt(m[1], 10) : 0
   }
@@ -295,17 +301,25 @@ BarWidget {
   }
 
   // Unread badge, in the top-right corner like a Dock tile.
+  //
+  // Sized against Style.bar.iconSlot (27px by default), not picked by eye: at
+  // the original Style.space(13) the badge was half the slot and swallowed the
+  // glyph it was supposed to annotate. A Dock badge sits at roughly a third of
+  // the tile, and the ring in background colour is what keeps it legible where
+  // it does overlap.
   Rectangle {
     id: badge
     visible: root.unread > 0
     anchors.right: parent.right
     anchors.top: parent.top
-    anchors.rightMargin: Style.space(1)
-    anchors.topMargin: Style.space(2)
-    height: Style.space(13)
-    width: Math.max(height, badgeLabel.implicitWidth + Style.space(6))
+    anchors.rightMargin: 0
+    anchors.topMargin: Style.space(1)
+    height: Math.round(Style.bar.iconSlot * 0.37)
+    width: Math.max(height, badgeLabel.implicitWidth + Style.space(5))
     radius: height / 2
     color: Color.urgent
+    border.width: 1
+    border.color: Color.background
     z: 2
 
     Text {
@@ -314,7 +328,7 @@ BarWidget {
       text: root.unread > 99 ? "99+" : String(root.unread)
       color: Color.background
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
-      font.pixelSize: Math.max(8, Style.font.caption - 2)
+      font.pixelSize: Math.max(7, Style.font.caption - 3)
       font.bold: true
     }
   }
