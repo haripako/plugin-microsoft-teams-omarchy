@@ -7,10 +7,15 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$HOME/.config/omarchy/plugins/fvargas.teams"
+BINDIR="$HOME/.local/bin"
 
 echo "==> Copying plugin to $DEST"
 mkdir -p "$DEST"
 cp "$REPO/plugin/manifest.json" "$REPO/plugin/BarWidget.qml" "$DEST/"
+
+echo "==> Installing helper scripts to $BINDIR"
+mkdir -p "$BINDIR"
+install -m 0755 "$REPO/bin/omarchy-teams-close" "$BINDIR/omarchy-teams-close"
 
 echo "==> Validating"
 omarchy plugin validate "$DEST"
@@ -35,12 +40,16 @@ omarchy bar put fvargas.teams --section right --index 0 || true
 omarchy bar set fvargas.teams homeWorkspace 1 || true
 
 echo "==> IPC check"
+# `quit` is deliberately absent: it closes the real window.
 for m in toggle show hide refresh; do
   printf '    %-8s ' "$m"
   out="$(omarchy-shell fvargas.teams "$m" 2>&1)" || true
   [ -z "$out" ] && echo "OK" || echo "$out"
   sleep 1
 done
+# The loop ends on `hide`, which would leave Teams parked on the special
+# workspace after every install. Put it back where the user left it.
+omarchy-shell -q fvargas.teams show || true
 
 cat <<'EOF'
 
@@ -48,6 +57,8 @@ Done. Two things this script deliberately does NOT do, because they append to
 files you also edit by hand:
 
   - hypr/bindings.snippet.lua   -> append to ~/.config/hypr/bindings.lua
+    (this one now matters: it is what makes SUPER+W hide Teams instead of
+     closing it, via the omarchy-teams-close installed above)
   - hypr/hyprland.snippet.lua   -> append to the END of ~/.config/hypr/hyprland.lua
 
 After appending either one: hyprctl reload && hyprctl configerrors

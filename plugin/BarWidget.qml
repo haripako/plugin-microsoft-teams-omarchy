@@ -12,6 +12,8 @@ import qs.Ui
 //   - a badge carries the unread count, read from the window title
 //   - hiding parks the window on a special workspace instead of quitting,
 //     which is what Cmd+H does on macOS
+//   - closing (SUPER+W) hides too, so the app keeps running in the background;
+//     right-clicking the icon is the deliberate way to actually quit
 BarWidget {
   id: root
   moduleName: "fvargas.teams"
@@ -53,13 +55,36 @@ BarWidget {
   readonly property bool micMuted: micSource && micSource.audio ? micSource.audio.muted : false
   readonly property var pwNodes: Pipewire.nodes ? Pipewire.nodes.values : []
 
-  // A live capture stream while Teams is open means a call is in progress.
-  // Mute state is deliberately ignored: muted-in-a-meeting is still in a meeting.
-  readonly property bool inCall: {
-    if (!root.running) return false
+  // Which process a capture stream must belong to before it counts as a call.
+  // Teams runs inside Chromium, and Chromium keeps its audio in a *separate*
+  // process from the window, so the window PID is useless for matching --
+  // the binary name is the only reliable signal.
+  readonly property string micApp: String(setting("micApp", "chromium")).toLowerCase()
+
+  // Every live capture stream, tracked so their `properties` maps stay populated.
+  readonly property var captureStreams: {
+    var out = []
     for (var i = 0; i < root.pwNodes.length; i++) {
       var n = root.pwNodes[i]
-      if (n && n.isStream && n.isSink === false) return true
+      if (n && n.isStream && n.isSink === false) out.push(n)
+    }
+    return out
+  }
+
+  PwObjectTracker { objects: root.captureStreams }
+
+  // A capture stream belonging to Teams' browser means a call is in progress.
+  // Filtering by process matters: without it *any* app touching the microphone
+  // (a recorder, Zoom, OBS) would flip the widget into "in a call" and force
+  // do-not-disturb on. Mute state is deliberately ignored -- muted-in-a-meeting
+  // is still in a meeting.
+  readonly property bool inCall: {
+    if (!root.running) return false
+    for (var i = 0; i < root.captureStreams.length; i++) {
+      var props = root.captureStreams[i].properties || {}
+      var who = String(props["application.process.binary"]
+                       || props["application.name"] || "").toLowerCase()
+      if (who.indexOf(root.micApp) >= 0) return true
     }
     return false
   }
@@ -67,24 +92,49 @@ BarWidget {
   PwObjectTracker { objects: root.micSource ? [root.micSource] : [] }
 
   // ---- automatic do-not-disturb ----
-  readonly property var notifications: (bar && bar.shell && typeof bar.shell.firstPartyServiceFor === "function")
-                                       ? bar.shell.firstPartyServiceFor("omarchy.notifications")
-                                       : null
+  // Looking the notification service up by a fixed id is a trap. Cloning the
+  // stock plugin gives the clone a new id and *disables* the original, so
+  // "omarchy.notifications" then resolves to null and auto-DND silently does
+  // nothing -- no error, no dot, just no DND. Find the service by the
+  // capability we actually need instead, and let a setting force one id.
+  readonly property string notificationsPlugin: String(setting("notificationsPlugin", ""))
+
+  function findNotifications() {
+    var shell = root.bar ? root.bar.shell : null
+    if (!shell || typeof shell.serviceFor !== "function") return null
+
+    if (root.notificationsPlugin !== "")
+      return shell.serviceFor(root.notificationsPlugin)
+
+    var registry = shell.pluginRegistry
+    var plugins = registry ? registry.installedPlugins : null
+    if (!plugins) return null
+    for (var id in plugins) {
+      var svc = shell.serviceFor(id)
+      if (svc && typeof svc.setDoNotDisturb === "function") return svc
+    }
+    return null
+  }
+
   property bool dndHeldByUs: false
   property bool dndWasOn: false
 
   onInCallChanged: {
-    if (!root.autoDnd || !root.notifications) return
+    if (!root.autoDnd) return
+    // Resolved per transition rather than cached: services come and go as
+    // plugins are enabled, and a null captured at startup would be permanent.
+    var notifications = root.findNotifications()
+    if (!notifications) return
 
     if (root.inCall) {
       if (root.dndHeldByUs) return
-      root.dndWasOn = root.notifications.doNotDisturb === true
+      root.dndWasOn = notifications.doNotDisturb === true
       root.dndHeldByUs = true
-      if (!root.dndWasOn) root.notifications.setDoNotDisturb(true)
+      if (!root.dndWasOn) notifications.setDoNotDisturb(true)
     } else if (root.dndHeldByUs) {
       root.dndHeldByUs = false
       // Only undo what we did; a DND the user turned on themselves stays on.
-      if (!root.dndWasOn) root.notifications.setDoNotDisturb(false)
+      if (!root.dndWasOn) notifications.setDoNotDisturb(false)
     }
   }
 
@@ -120,6 +170,19 @@ BarWidget {
     cmds.push(root.dispatchLua("hl.dsp.focus({ window = \"address:" + root.winAddress + "\" })"))
 
     root.bar.run(cmds.join(" ; "))
+    probeSoon()
+  }
+
+  // Actually quit Teams, as opposed to parking it. This is the only way out
+  // now that SUPER+W hides instead of closing, so it lives on right-click.
+  //
+  // The address guard is not paranoia: hl.dsp.window.close() falls back to the
+  // *active* window when handed an empty address, so an unset winAddress would
+  // close whatever the user happens to be looking at.
+  function quitApp() {
+    if (!root.running || root.winAddress === "") return
+    root.bar.run(root.dispatchLua(
+      "hl.dsp.window.close({ window = \"address:" + root.winAddress + "\" })"))
     probeSoon()
   }
 
@@ -195,6 +258,7 @@ BarWidget {
     function toggle(): void { root.broadcast("toggleApp") }
     function show(): void { root.broadcast("showApp") }
     function hide(): void { root.broadcast("hideApp") }
+    function quit(): void { root.broadcast("quitApp") }
     function refresh(): void { root.broadcast("refresh") }
   }
 
@@ -221,7 +285,7 @@ BarWidget {
     }
     onPressed: function(b) {
       if (b === Qt.MiddleButton) root.toggleMic()
-      else if (b === Qt.RightButton) root.hideApp()
+      else if (b === Qt.RightButton) root.quitApp()
       else root.toggleApp()
     }
 
@@ -256,6 +320,11 @@ BarWidget {
   }
 
   // Presence dot: accent when available, urgent while in a call.
+  //
+  // Colour alone cannot carry that distinction. Plenty of Omarchy themes make
+  // accent and urgent near-identical -- the one this was built against resolves
+  // them to #b59790 and #c38b7b, two dusty roses that are the same dot at 7px.
+  // So the call state also grows and pulses, channels no palette can flatten.
   Rectangle {
     id: presenceDot
     visible: root.running && !root.hidden
@@ -263,12 +332,26 @@ BarWidget {
     anchors.bottom: parent.bottom
     anchors.rightMargin: Style.space(2)
     anchors.bottomMargin: Style.space(3)
-    width: Style.space(7)
+    width: root.inCall ? Style.space(10) : Style.space(7)
     height: width
     radius: width / 2
     color: root.inCall ? Color.urgent : Color.accent
     border.width: 1
     border.color: Color.background
     z: 2
+
+    Behavior on width {
+      NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+    }
+
+    SequentialAnimation on opacity {
+      running: root.inCall
+      loops: Animation.Infinite
+      // The animation owns `opacity` only while it runs; on stop it leaves the
+      // dot wherever the cycle happened to be, so put it back to full.
+      onRunningChanged: if (!running) presenceDot.opacity = 1.0
+      NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
+      NumberAnimation { to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+    }
   }
 }

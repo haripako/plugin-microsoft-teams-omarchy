@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# SUPER+W with macOS semantics for Teams.
+#
+# Closing Teams hides it instead of quitting, so it keeps running in the
+# background and stays reachable from the bar icon. Every other window closes
+# as usual. Quitting Teams for real is right-click on its bar icon.
+set -uo pipefail
+
+match="${TEAMS_MATCH_CLASS:-chrome-teams}"
+
+read -r class addr <<<"$(hyprctl activewindow -j 2>/dev/null | python3 -c '
+import json, sys
+try:
+    w = json.load(sys.stdin) or {}
+except Exception:
+    w = {}
+print(w.get("class", "") or "-", w.get("address", "") or "-")
+')"
+
+if [[ "${class,,}" == *"${match,,}"* ]]; then
+  exec omarchy-shell -q fvargas.teams hide
+fi
+
+# Guard the address rather than letting it through empty: hl.dsp.window.close()
+# silently falls back to the *active* window when handed "address:", which turns
+# a no-op into closing whatever the user is looking at.
+[[ "$addr" == "-" ]] && exit 0
+exec hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })"
