@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "fvargas.teams",
+  "name": "Microsoft Teams",
+  "version": "1.0.0",
+  "author": "fvargas",
+  "license": "MIT",
+  "description": "Teams dock-style control: hide/show, unread badge, call presence and auto-DND",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Microsoft Teams",
+    "description": "Teams icon with unread badge, call presence and hide/show",
+    "category": "Status",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "schema": [
+      {
+        "key": "autoDnd",
+        "type": "boolean",
+        "label": "Silence notifications while in a call",
+        "description": "Enable do-not-disturb automatically during Teams calls and restore it afterwards.",
+        "default": true
+      },
+      {
+        "key": "homeWorkspace",
+        "type": "string",
+        "label": "Home workspace",
+        "description": "Workspace to return Teams to when unhiding. Leave empty to follow the active workspace.",
+        "default": ""
+      },
+      {
+        "key": "url",
+        "type": "string",
+        "label": "Teams URL",
+        "default": "https://teams.microsoft.com"
+      },
+      {
+        "key": "matchClass",
+        "type": "string",
+        "label": "Window class fragment",
+        "description": "Substring matched against the window class to find the Teams window.",
+        "default": "chrome-teams"
+      },
+      {
+        "key": "pollInterval",
+        "type": "integer",
+        "label": "Window poll interval (ms)",
+        "default": 2000
+      }
+    ]
+  }
+}
