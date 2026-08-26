@@ -12,11 +12,28 @@ import qs.Ui
 //   - a badge carries the unread count, read from the window title
 //   - hiding parks the window on a special workspace instead of quitting,
 //     which is what Cmd+H does on macOS
-//   - closing (SUPER+W) hides too, so the app keeps running in the background;
-//     right-clicking the icon is the deliberate way to actually quit
-BarWidget {
+//   - closing (SUPER+W) hides too, so the app keeps running in the background
+//   - right-clicking opens a menu; quitting for real lives in there, because a
+//     right-click that closes the app without asking is not a thing anyone expects
+Panel {
   id: root
   moduleName: "fvargas.teams"
+  ipcTarget: "fvargas.teams"
+  // Panel's built-in IPC would claim show/hide/toggle for the *popup*. Those
+  // names are already spoken for here -- SUPER+H and omarchy-teams-close call
+  // them meaning the Teams *window* -- so this widget keeps its own handler.
+  manageIpc: false
+
+  // Panel, unlike BarWidget, has no broadcast(). An IPC target routes to a
+  // single handler but a bar surface exists per monitor, so without this a
+  // refresh would update one screen and leave the others stale.
+  function broadcast(method) {
+    var items = bar && typeof bar.moduleWidgets === "function"
+      ? bar.moduleWidgets(moduleName) : [root]
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && typeof items[i][method] === "function") items[i][method]()
+    }
+  }
 
   // ---- settings ----
   readonly property string appUrl: String(setting("url", "https://teams.microsoft.com"))
@@ -265,6 +282,7 @@ BarWidget {
     function show(): void { root.broadcast("showApp") }
     function hide(): void { root.broadcast("hideApp") }
     function quit(): void { root.broadcast("quitApp") }
+    function menu(): void { root.toggle() }
     function refresh(): void { root.broadcast("refresh") }
   }
 
@@ -291,12 +309,123 @@ BarWidget {
     }
     onPressed: function(b) {
       if (b === Qt.MiddleButton) root.toggleMic()
-      else if (b === Qt.RightButton) root.quitApp()
+      else if (b === Qt.RightButton) root.toggle()
       else root.toggleApp()
     }
 
     Behavior on opacity {
       NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+    }
+  }
+
+  // ---- the menu ----
+  // Anchored to the icon and opened on right-click. Everything destructive or
+  // non-obvious lives here rather than on a mouse button nobody would guess.
+  readonly property string stateLine: {
+    if (!root.running) return "Not running"
+    var bits = [root.hidden ? "Hidden" : "Visible"]
+    if (root.unread > 0) bits.push(root.unread + " unread")
+    if (root.inCall) bits.push(root.micMuted ? "in a call · mic muted" : "in a call")
+    return bits.join(" · ")
+  }
+
+  KeyboardPanel {
+    id: menuPanel
+    anchorItem: button
+    owner: root
+    bar: root.bar
+    open: root.opened
+    focusTarget: menuKeys
+    contentWidth: menuPanel.fittedContentWidth(Style.space(260))
+    contentHeight: menuPanel.fittedContentHeight(menuColumn.implicitHeight)
+
+    PanelKeyCatcher {
+      id: menuKeys
+      anchors.fill: parent
+      onCloseRequested: root.close()
+      onTabRequested: function(direction) { root.switchPanel(direction) }
+      onTextKey: function(t) {
+        var k = String(t).toLowerCase()
+        if (k === "h") { root.toggleApp(); root.close() }
+        else if (k === "m") root.toggleMic()
+        else if (k === "q") { root.quitApp(); root.close() }
+      }
+
+      Column {
+        id: menuColumn
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        spacing: Style.space(10)
+
+        // Header: what Teams is doing right now.
+        Column {
+          width: parent.width
+          spacing: Style.space(2)
+
+          Text {
+            text: "Microsoft Teams"
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.body
+            font.bold: true
+          }
+          Text {
+            text: root.stateLine
+            color: Qt.darker(root.bar ? root.bar.foreground : Color.foreground, 1.55)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
+            width: parent.width
+          }
+        }
+
+        PanelSeparator { width: parent.width }
+
+        Button {
+          width: parent.width
+          leftAlign: true
+          bordered: true
+          enabled: root.running
+          iconText: root.hidden ? String.fromCodePoint(0xF06D0) : String.fromCodePoint(0xF06D1)
+          text: root.hidden ? "Show Teams" : "Hide Teams"
+          fontSize: Style.font.bodySmall
+          foreground: root.bar ? root.bar.foreground : Color.foreground
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          onClicked: { root.toggleApp(); root.close() }
+        }
+
+        Button {
+          width: parent.width
+          leftAlign: true
+          bordered: true
+          enabled: root.micSource !== null
+          iconText: root.micMuted ? String.fromCodePoint(0xF036D) : String.fromCodePoint(0xF036C)
+          text: root.micMuted ? "Unmute microphone" : "Mute microphone"
+          fontSize: Style.font.bodySmall
+          foreground: root.bar ? root.bar.foreground : Color.foreground
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          // Deliberately leaves the menu open: muting mid-call is something you
+          // want to see confirmed, and the label flips in place.
+          onClicked: root.toggleMic()
+        }
+
+        PanelSeparator { width: parent.width }
+
+        Button {
+          width: parent.width
+          leftAlign: true
+          bordered: true
+          enabled: root.running
+          iconText: String.fromCodePoint(0xF0206)
+          text: "Quit Teams"
+          fontSize: Style.font.bodySmall
+          // Urgent, because this one actually kills the app rather than parking it.
+          foreground: Color.urgent
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          onClicked: { root.quitApp(); root.close() }
+        }
+      }
     }
   }
 
