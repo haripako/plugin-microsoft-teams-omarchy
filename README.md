@@ -34,6 +34,12 @@ Teams on Linux is a browser tab. This makes it feel like an application.
 omarchy plugin add https://github.com/haripako/plugin-microsoft-teams-omarchy.git --enable
 ```
 
+The command above works today and needs nothing else. There is also a
+[marketplace listing](https://omarchyplugins.com/plugin.html?id=io.github.haripako.teams)
+([submission](https://github.com/HANCORE-linux/omarchy-plugin-marketplace/issues/2592)),
+which is awaiting maintainer approval — until it is approved that page will say
+the plugin was not found.
+
 Then add the widget to your bar, if it did not land there automatically:
 
 ```bash
