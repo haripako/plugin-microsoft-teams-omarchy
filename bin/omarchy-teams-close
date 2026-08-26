@@ -18,7 +18,7 @@ print(w.get("class", "") or "-", w.get("address", "") or "-")
 ')"
 
 if [[ "${class,,}" == *"${match,,}"* ]]; then
-  exec omarchy-shell -q fvargas.teams hide
+  exec omarchy-shell -q teams hide
 fi
 
 # Guard the address rather than letting it through empty: hl.dsp.window.close()

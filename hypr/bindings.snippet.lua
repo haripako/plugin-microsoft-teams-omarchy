@@ -6,9 +6,9 @@
 o.bind("SUPER + SHIFT + T", "Teams", "omarchy-launch-or-focus-webapp chrome-teams https://teams.microsoft.com")
 
 -- Ocultar/mostrar Teams sin cerrarlo, equivalente a Cmd+H en macOS.
--- Delega en el plugin fvargas.teams, que aparca la ventana en un workspace
+-- Delega en el plugin io.github.haripako.teams, que aparca la ventana en un workspace
 -- especial y la devuelve al workspace activo al restaurarla.
-o.bind("SUPER + H", "Hide/show Teams", "omarchy-shell -q fvargas.teams toggle")
+o.bind("SUPER + H", "Hide/show Teams", "omarchy-shell -q teams toggle")
 
 -- SUPER+W deja Teams en segundo plano en vez de cerrarlo, como en macOS: la
 -- ventana se aparca y el icono de la barra sigue vivo. El resto de ventanas se

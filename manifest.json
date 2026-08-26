@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "fvargas.teams",
+  "id": "io.github.haripako.teams",
   "name": "Microsoft Teams",
   "version": "1.0.0",
-  "author": "fvargas",
+  "author": "Haripako",
   "license": "MIT",
   "description": "Teams dock-style control: hide/show, unread badge, call presence and auto-DND",
   "kinds": [
@@ -51,6 +51,20 @@
         "type": "integer",
         "label": "Window poll interval (ms)",
         "default": 2000
+      },
+      {
+        "key": "micApp",
+        "type": "string",
+        "label": "Microphone owner",
+        "description": "Process name a capture stream must belong to before it counts as a Teams call. Teams runs inside Chromium, whose audio lives in a separate process from the window.",
+        "default": "chromium"
+      },
+      {
+        "key": "notificationsPlugin",
+        "type": "string",
+        "label": "Notifications plugin id",
+        "description": "Leave empty to detect the notification service automatically. Set it only if auto-detection picks the wrong one.",
+        "default": ""
       }
     ]
   }

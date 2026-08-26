@@ -17,8 +17,8 @@ import qs.Ui
 //     right-click that closes the app without asking is not a thing anyone expects
 Panel {
   id: root
-  moduleName: "fvargas.teams"
-  ipcTarget: "fvargas.teams"
+  moduleName: "io.github.haripako.teams"
+  ipcTarget: "teams"
   // Panel's built-in IPC would claim show/hide/toggle for the *popup*. Those
   // names are already spoken for here -- SUPER+H and omarchy-teams-close call
   // them meaning the Teams *window* -- so this widget keeps its own handler.
@@ -56,7 +56,7 @@ Panel {
 
   // Forces a count so the badge can be looked at on demand. Otherwise the only
   // way to see it is to wait for somebody to message you, which is how it went
-  // unverified for so long. `omarchy bar set fvargas.teams debugUnread 3`.
+  // unverified for so long. `omarchy bar set io.github.haripako.teams debugUnread 3`.
   readonly property int debugUnread: Math.max(0, Number(setting("debugUnread", 0)))
 
   // Teams puts the unread count at the head of the title: "(3) Chat | ..."
@@ -277,7 +277,7 @@ Panel {
   }
 
   IpcHandler {
-    target: "fvargas.teams"
+    target: "teams"
     function toggle(): void { root.broadcast("toggleApp") }
     function show(): void { root.broadcast("showApp") }
     function hide(): void { root.broadcast("hideApp") }

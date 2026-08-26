@@ -6,12 +6,12 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEST="$HOME/.config/omarchy/plugins/fvargas.teams"
+DEST="$HOME/.config/omarchy/plugins/io.github.haripako.teams"
 BINDIR="$HOME/.local/bin"
 
 echo "==> Copying plugin to $DEST"
 mkdir -p "$DEST"
-cp "$REPO/plugin/manifest.json" "$REPO/plugin/BarWidget.qml" "$DEST/"
+cp "$REPO/manifest.json" "$REPO/BarWidget.qml" "$DEST/"
 
 echo "==> Installing helper scripts to $BINDIR"
 mkdir -p "$BINDIR"
@@ -36,20 +36,20 @@ omarchy restart shell
 sleep 5
 
 echo "==> Bar placement + settings"
-omarchy bar put fvargas.teams --section right --index 0 || true
-omarchy bar set fvargas.teams homeWorkspace 1 || true
+omarchy bar put io.github.haripako.teams --section right --index 0 || true
+omarchy bar set io.github.haripako.teams homeWorkspace 1 || true
 
 echo "==> IPC check"
 # `quit` is deliberately absent: it closes the real window.
 for m in toggle show hide refresh; do
   printf '    %-8s ' "$m"
-  out="$(omarchy-shell fvargas.teams "$m" 2>&1)" || true
+  out="$(omarchy-shell teams "$m" 2>&1)" || true
   [ -z "$out" ] && echo "OK" || echo "$out"
   sleep 1
 done
 # The loop ends on `hide`, which would leave Teams parked on the special
 # workspace after every install. Put it back where the user left it.
-omarchy-shell -q fvargas.teams show || true
+omarchy-shell -q teams show || true
 
 cat <<'EOF'
 
