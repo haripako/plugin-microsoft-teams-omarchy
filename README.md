@@ -7,7 +7,7 @@ call.
 
 Teams on Linux is a browser tab. This makes it feel like an application.
 
-![the widget, its badge and its menu](docs/screenshot.png)
+![the widget and its menu](preview.png)
 
 ## What it does
 
