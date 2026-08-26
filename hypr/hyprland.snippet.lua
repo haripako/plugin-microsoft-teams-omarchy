@@ -1,10 +1,22 @@
--- Append to the END of ~/.config/hypr/hyprland.lua
--- (after the hyprmoncfg dofile, so nothing overrides it)
-
--- Teams vive siempre en el workspace 1 del portatil.
--- La primera regla ancla el workspace 1 a eDP-1: sin ella Hyprland lo coloca
--- en el monitor donde se abriera primero, que varia entre arranques.
--- Va al final del fichero, despues del dofile de hyprmoncfg, para que nada
--- lo sobrescriba.
+-- OPTIONAL, and an example rather than something to paste unchanged: it pins
+-- Teams to one workspace on one monitor. Skip it entirely if you would rather
+-- Teams open wherever you are.
+--
+-- Append to the END of ~/.config/hypr/hyprland.lua. The end matters: if you
+-- use hyprmoncfg, its dofile is the last line and regenerates monitor config
+-- on every start, so anything placed above it can be overridden.
+--
+-- Replace "eDP-1" with your own monitor -- `hyprctl monitors -j` lists them.
+-- The first rule anchors workspace 1 to that output; without it Hyprland puts
+-- the workspace on whichever monitor opened it first, which varies between
+-- boots. The second sends Teams to that workspace.
+--
+-- If you use this, also set the widget's `homeWorkspace` setting to the same
+-- workspace, so unhiding returns Teams there instead of dragging it to
+-- whichever workspace you happen to be on:
+--
+--   omarchy bar set io.github.haripako.teams homeWorkspace 1
+--
+-- Note hl.workspace_rule takes a table; positional arguments are rejected.
 hl.workspace_rule({ workspace = "1", monitor = "eDP-1" })
 o.window("^chrome-teams", { workspace = "1" })
