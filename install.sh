@@ -35,9 +35,11 @@ echo "==> Restarting the Omarchy shell"
 omarchy restart shell
 sleep 5
 
-echo "==> Bar placement + settings"
+# Placement only. Deliberately no `omarchy bar set` here: pinning a
+# homeWorkspace is specific to whoever set up the window rules, and imposing
+# one would overwrite a choice the user never made. The README explains it.
+echo "==> Bar placement"
 omarchy bar put io.github.haripako.teams --section right --index 0 || true
-omarchy bar set io.github.haripako.teams homeWorkspace 1 || true
 
 echo "==> IPC check"
 # `quit` is deliberately absent: it closes the real window.

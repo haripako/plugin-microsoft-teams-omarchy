@@ -125,6 +125,32 @@ Note that it calls `hl.unbind("SUPER + W")` first. Binding the same key twice
 does not replace the old binding, it **stacks** — without the unbind, Teams
 would be hidden *and* closed.
 
+## Removal
+
+```bash
+omarchy plugin remove io.github.haripako.teams
+rm -f ~/.local/bin/omarchy-teams-close
+omarchy restart shell
+```
+
+Then, if you added them by hand:
+
+- delete the appended block from `~/.config/hypr/bindings.lua`, and the one
+  from `~/.config/hypr/hyprland.lua` if you used the workspace pinning
+- run `hyprctl reload`
+
+Delete the bindings block **before** removing `omarchy-teams-close`, or in the
+same pass. That block contains `hl.unbind("SUPER + W")`, so leaving it behind
+while deleting the script it points at leaves `SUPER + W` bound to something
+that no longer exists — that is, no way to close any window.
+
+If Teams is parked on the hidden workspace when you remove the widget, bring
+it back first with `omarchy-shell teams show`, or afterwards with:
+
+```bash
+hyprctl dispatch 'hl.dsp.focus({ workspace = "special:teamshidden" })'
+```
+
 ## Requirements
 
 - Omarchy 4 (the widget uses the Lua `hl.dsp` dispatch API)
