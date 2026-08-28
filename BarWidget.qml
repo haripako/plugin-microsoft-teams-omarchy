@@ -36,15 +36,34 @@ Panel {
   }
 
   // ---- settings ----
-  readonly property string appUrl: String(setting("url", "https://teams.microsoft.com"))
-  readonly property string matchClass: String(setting("matchClass", "chrome-teams")).toLowerCase()
+  //
+  // Every one of these reaches a command line, so each is checked against a
+  // strict pattern and falls back to its default when it does not match. This
+  // is the second line of defence -- commands are built as argv vectors rather
+  // than shell strings (see runArgv) -- but a setting that cannot express
+  // anything but its intended shape is a much smaller thing to reason about.
+  function settingMatching(name, fallback, pattern) {
+    var value = String(setting(name, fallback))
+    return pattern.test(value) ? value : fallback
+  }
+
+  readonly property string appUrl: settingMatching(
+    "url", "https://teams.microsoft.com", /^https?:\/\/[A-Za-z0-9._~:\/?#\[\]@!$&'()*+,;=%-]+$/)
+
+  // Must be non-empty: this is used with indexOf(), and "" is a substring of
+  // every string, so an empty fragment would match every window on the system.
+  readonly property string matchClass: settingMatching(
+    "matchClass", "chrome-teams", /^[A-Za-z0-9._-]+$/).toLowerCase()
+
   readonly property bool autoDnd: setting("autoDnd", true) === true
   readonly property int pollInterval: Math.max(500, Number(setting("pollInterval", 2000)))
   readonly property string hideWorkspace: "special:teamshidden"
+
   // When set, unhiding returns Teams to this workspace instead of following
   // you around. Needed once a window rule pins Teams to a fixed workspace,
   // otherwise showing it would drag it off its assigned monitor.
-  readonly property string homeWorkspace: String(setting("homeWorkspace", ""))
+  readonly property string homeWorkspace: settingMatching(
+    "homeWorkspace", "", /^$|^(special:)?[A-Za-z0-9_-]+$/)
 
   // ---- window state, refreshed from hyprctl ----
   property string winAddress: ""
@@ -142,42 +161,77 @@ Panel {
   property bool dndHeldByUs: false
   property bool dndWasOn: false
 
-  onInCallChanged: {
-    if (!root.autoDnd) return
-    // Resolved per transition rather than cached: services come and go as
-    // plugins are enabled, and a null captured at startup would be permanent.
+  // Give do-not-disturb back, if and only if this widget is the one holding it.
+  // Every path out of "we turned DND on" has to come through here, because a
+  // suppressed notification the user never asked for and cannot see is the
+  // worst failure this widget has available to it.
+  function releaseDnd() {
+    if (!root.dndHeldByUs) return
+    root.dndHeldByUs = false
+    // Only undo what we did; a DND the user turned on themselves stays on.
+    if (root.dndWasOn) return
     var notifications = root.findNotifications()
-    if (!notifications) return
+    if (notifications) notifications.setDoNotDisturb(false)
+  }
 
+  onInCallChanged: {
     if (root.inCall) {
-      if (root.dndHeldByUs) return
+      if (!root.autoDnd || root.dndHeldByUs) return
+      // Resolved per transition rather than cached: services come and go as
+      // plugins are enabled, and a null captured at startup would be permanent.
+      var notifications = root.findNotifications()
+      if (!notifications) return
       root.dndWasOn = notifications.doNotDisturb === true
       root.dndHeldByUs = true
       if (!root.dndWasOn) notifications.setDoNotDisturb(true)
-    } else if (root.dndHeldByUs) {
-      root.dndHeldByUs = false
-      // Only undo what we did; a DND the user turned on themselves stays on.
-      if (!root.dndWasOn) notifications.setDoNotDisturb(false)
+    } else {
+      // Unconditional: autoDnd may have been switched off mid-call, and the
+      // old code returned early on that check and left DND on for good.
+      root.releaseDnd()
     }
   }
 
+  // Turning the setting off during a call used to strand DND on. Whoever
+  // disables the feature is asking for it to stop acting -- including undoing
+  // what it already did.
+  onAutoDndChanged: if (!root.autoDnd) root.releaseDnd()
+
+  // A shell restart or `omarchy plugin disable` destroys the widget. Without
+  // this, it takes the user's notifications with it.
+  Component.onDestruction: root.releaseDnd()
+
   // ---- actions ----
+  // Commands are run as an argv vector, never as a shell string. bar.run() goes
+  // through Util.execDetached, which is `bash -lc <command>` -- so anything
+  // interpolated into it is shell syntax, and these values come from settings
+  // the user edits. Util.execArgv runs `bash -lc 'exec "$@"'` instead, where
+  // arguments land in positional parameters and are never re-tokenized.
+  function runArgv(argv) {
+    Util.execArgv(argv)
+  }
+
+  // Belt and braces for the Lua layer: the dispatch argument is a single argv
+  // element so the shell never sees it, but a stray quote would still break the
+  // Lua expression itself.
+  function luaStr(value) {
+    return '"' + String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'
+  }
+
   // Omarchy 4 drives Hyprland through its Lua dispatch API. The pre-Lua form
   // ("dispatch movetoworkspacesilent ws,address:0x...") is rejected outright,
-  // so every dispatch below is built as a Lua expression. The Lua uses double
-  // quotes, so the shell side is wrapped in single quotes.
-  function dispatchLua(lua) {
-    return "hyprctl dispatch '" + lua + "'"
+  // so every dispatch below is built as a Lua expression.
+  function dispatch(lua) {
+    root.runArgv(["hyprctl", "dispatch", lua])
   }
 
   function moveLua(workspace) {
-    return "hl.dsp.window.move({ window = \"address:" + root.winAddress
-         + "\", workspace = \"" + workspace + "\", follow = false })"
+    return "hl.dsp.window.move({ window = " + root.luaStr("address:" + root.winAddress)
+         + ", workspace = " + root.luaStr(workspace) + ", follow = false })"
   }
 
   function showApp() {
     if (!root.running) {
-      root.bar.run("omarchy-launch-or-focus-webapp " + root.matchClass + " " + root.appUrl)
+      root.runArgv(["omarchy-launch-or-focus-webapp", root.matchClass, root.appUrl])
       probeSoon()
       return
     }
@@ -185,14 +239,13 @@ Panel {
                ? root.homeWorkspace
                : String(Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : 1)
 
-    var cmds = [root.dispatchLua(root.moveLua(target))]
+    root.dispatch(root.moveLua(target))
     // Sending it to a fixed workspace is pointless if the eye stays elsewhere,
     // so follow it over before focusing the window itself.
     if (root.homeWorkspace !== "")
-      cmds.push(root.dispatchLua("hl.dsp.focus({ workspace = \"" + target + "\" })"))
-    cmds.push(root.dispatchLua("hl.dsp.focus({ window = \"address:" + root.winAddress + "\" })"))
+      root.dispatch("hl.dsp.focus({ workspace = " + root.luaStr(target) + " })")
+    root.dispatch("hl.dsp.focus({ window = " + root.luaStr("address:" + root.winAddress) + " })")
 
-    root.bar.run(cmds.join(" ; "))
     probeSoon()
   }
 
@@ -204,14 +257,14 @@ Panel {
   // close whatever the user happens to be looking at.
   function quitApp() {
     if (!root.running || root.winAddress === "") return
-    root.bar.run(root.dispatchLua(
-      "hl.dsp.window.close({ window = \"address:" + root.winAddress + "\" })"))
+    root.dispatch("hl.dsp.window.close({ window = "
+                  + root.luaStr("address:" + root.winAddress) + " })")
     probeSoon()
   }
 
   function hideApp() {
     if (!root.running || root.hidden) return
-    root.bar.run(root.dispatchLua(root.moveLua(root.hideWorkspace)))
+    root.dispatch(root.moveLua(root.hideWorkspace))
     probeSoon()
   }
 
