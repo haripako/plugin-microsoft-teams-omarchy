@@ -55,6 +55,27 @@ Panel {
   readonly property string matchClass: settingMatching(
     "matchClass", "chrome-teams", /^[A-Za-z0-9._-]+$/).toLowerCase()
 
+  // How to start Teams when it is not running. Empty means the Chromium web app,
+  // launched through Omarchy's helper. Set it to a command (a string, or an argv
+  // array for arguments) to drive a native client instead -- teams-for-linux,
+  // say. Unlike the settings above this one IS meant to name a program, so the
+  // check is only that it looks like a command: it runs through the same argv
+  // path as everything else, so no shell ever parses it.
+  readonly property var launchCommand: setting("launchCommand", "")
+
+  function launchArgv() {
+    var lc = root.launchCommand
+    var argv = []
+    if (typeof lc === "string") {
+      if (lc !== "") argv = [lc]
+    } else if (Array.isArray(lc)) {
+      argv = lc.map(function(a) { return String(a) })
+    }
+    argv = argv.filter(function(a) { return a !== "" && !/[\r\n]/.test(a) })
+    if (argv.length) return argv
+    return ["omarchy-launch-or-focus-webapp", root.matchClass, root.appUrl]
+  }
+
   readonly property bool autoDnd: setting("autoDnd", true) === true
   readonly property int pollInterval: Math.max(500, Number(setting("pollInterval", 2000)))
   readonly property string hideWorkspace: "special:teamshidden"
@@ -231,7 +252,7 @@ Panel {
 
   function showApp() {
     if (!root.running) {
-      root.runArgv(["omarchy-launch-or-focus-webapp", root.matchClass, root.appUrl])
+      root.runArgv(root.launchArgv())
       probeSoon()
       return
     }

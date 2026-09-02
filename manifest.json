@@ -40,6 +40,13 @@
         "default": "https://teams.microsoft.com"
       },
       {
+        "key": "launchCommand",
+        "type": "string",
+        "label": "Launch command",
+        "description": "Command that starts Teams when it is not running. Empty launches the Chromium web app. Set it to a native client's command (for example teams-for-linux) to drive that instead.",
+        "default": ""
+      },
+      {
         "key": "matchClass",
         "type": "string",
         "label": "Window class fragment",
