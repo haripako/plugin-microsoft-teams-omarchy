@@ -65,6 +65,7 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or through
 | `url` | `https://teams.microsoft.com` | Opened when Teams is not running. |
 | `matchClass` | `chrome-teams` | Substring matched against the window class to find the Teams window. |
 | `pollInterval` | `2000` | How often the window state is re-read, in milliseconds. |
+| `launchCommand` | `""` | Command that starts Teams when it is not running. Empty launches the Chromium web app. |
 | `micApp` | `chromium` | Process a capture stream must belong to before it counts as a call. |
 | `notificationsPlugin` | `""` | Empty auto-detects the notification service. Set it only if detection picks the wrong one. |
 
@@ -79,6 +80,36 @@ Teams runs inside Chromium, and Chromium keeps its audio in a **separate process
 from the window**, so the window's PID cannot be used for matching. The process
 name is the reliable signal. If you run Teams in something other than Chromium,
 set this to that browser's binary name.
+
+### Using a native client instead of the web app
+
+Everything except launching works against whatever window `matchClass` finds,
+because hide, show and quit act on a window address. So a native client only
+needs three settings. For [teams-for-linux](https://github.com/IsmaelMartinez/teams-for-linux):
+
+```bash
+omarchy bar set io.github.haripako.teams matchClass    teams-work
+omarchy bar set io.github.haripako.teams micApp        teams-for-linux
+omarchy bar set io.github.haripako.teams launchCommand teams-for-linux
+```
+
+`matchClass` is whatever `hyprctl clients -j` reports for the window — with
+teams-for-linux that depends on how it was started, since its multi-profile
+wrappers pass `--class`. `micApp` is the binary name, not the application name:
+Electron announces itself to PipeWire as "Chromium input", so matching on the
+name would be wrong.
+
+Two things worth knowing about teams-for-linux specifically, neither of them
+this widget's doing:
+
+- **It disables the GPU by default on native Wayland**, so the interface is
+  composited on the CPU. Check with `--use-gl=disabled` in its gpu-process
+  arguments. Put `{"disableGpu": false}` in its `config.json` to get hardware
+  rendering back — in its `--user-data-dir` if a wrapper overrides that. The
+  default exists to avoid blank windows on some compositors, so undo it if you
+  get one.
+- **Closing the window does not quit it** — it stays in the tray, which is
+  rather the point. Configuration changes need the process itself to restart.
 
 ### About `notificationsPlugin`
 
