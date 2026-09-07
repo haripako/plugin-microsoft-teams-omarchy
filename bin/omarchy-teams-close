@@ -6,7 +6,42 @@
 # as usual. Quitting Teams for real is right-click on its bar icon.
 set -uo pipefail
 
-match="${TEAMS_MATCH_CLASS:-chrome-teams}"
+# The class fragment has to agree with the widget's `matchClass`, or SUPER+W
+# stops recognising Teams and closes it for real instead of hiding it. Rather
+# than hardcode a default that is only right for the web app, read the setting
+# the widget itself uses. Precedence: TEAMS_MATCH_CLASS, then shell.json, then
+# the web app's class.
+#
+# python3 is already a dependency of this script, so this adds none.
+match="${TEAMS_MATCH_CLASS:-}"
+
+if [[ -z $match ]]; then
+  match="$(python3 - <<'PY' 2>/dev/null
+import json, os, pathlib
+
+cfg = pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or
+                   pathlib.Path.home() / ".config") / "omarchy" / "shell.json"
+try:
+    layout = json.loads(cfg.read_text()).get("bar", {}).get("layout", {})
+except (OSError, ValueError, AttributeError):
+    raise SystemExit
+
+# Settings live inline as siblings of "id": the shell copies every key except
+# "id" into the widget's settings.
+for section in layout.values():
+    if not isinstance(section, list):
+        continue
+    for entry in section:
+        if isinstance(entry, dict) and entry.get("id") == "io.github.haripako.teams":
+            value = entry.get("matchClass")
+            if isinstance(value, str) and value:
+                print(value)
+            raise SystemExit
+PY
+)"
+fi
+
+match="${match:-chrome-teams}"
 
 read -r class addr <<<"$(hyprctl activewindow -j 2>/dev/null | python3 -c '
 import json, sys
