@@ -84,14 +84,34 @@ set this to that browser's binary name.
 ### Using a native client instead of the web app
 
 Everything except launching works against whatever window `matchClass` finds,
-because hide, show and quit act on a window address. So a native client only
-needs three settings. For [teams-for-linux](https://github.com/IsmaelMartinez/teams-for-linux):
+because hide, show and quit act on a window address. So the widget itself needs
+three settings. For [teams-for-linux](https://github.com/IsmaelMartinez/teams-for-linux):
 
 ```bash
-omarchy bar set io.github.haripako.teams matchClass    teams-work
+omarchy bar set io.github.haripako.teams matchClass    teams-for-linux
 omarchy bar set io.github.haripako.teams micApp        teams-for-linux
 omarchy bar set io.github.haripako.teams launchCommand teams-for-linux
 ```
+
+Those three cover the widget. **If you also pasted the optional workspace
+snippet from `hypr/hyprland.snippet.lua`, its `o.window(...)` pattern is
+matched against the window class and has to name the client you actually run**
+— Hyprland evaluates that rule when the window is mapped, so nothing the widget
+does can substitute for it. The shipped example covers both classes; keep the
+one you use.
+
+Nothing else needs editing. The keybindings snippet routes SUPER+SHIFT+T
+through the widget rather than naming a launch command of its own, and
+`omarchy-teams-close` reads `matchClass` back out of `shell.json`. Earlier
+versions hardcoded the web app in both places, which made switching to a native
+client half-work: the bar icon drove the native client while SUPER+SHIFT+T kept
+opening the web app, and SUPER+W stopped recognising Teams and closed it for
+real instead of hiding it.
+
+Running both at once is worth avoiding for a reason beyond tidiness: each one
+registers its own notifications, so every message arrives twice — measured at
+about 70 ms apart, the web app's copy tagged critical by Chromium and carrying
+a link body, the native client's carrying the message text.
 
 `matchClass` is whatever `hyprctl clients -j` reports for the window — with
 teams-for-linux that depends on how it was started, since its multi-profile

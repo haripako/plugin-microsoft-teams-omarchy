@@ -18,5 +18,15 @@
 --   omarchy bar set io.github.haripako.teams homeWorkspace 1
 --
 -- Note hl.workspace_rule takes a table; positional arguments are rejected.
+--
+-- The window pattern is matched against the window CLASS, and it has to be the
+-- class of whichever Teams you actually run -- this is the one place the widget
+-- cannot cover for you, because Hyprland evaluates the rule when the window is
+-- mapped. `^chrome-teams` is the web app; `teams-for-linux` is that native
+-- client. Check yours with `hyprctl clients -j` and keep only what you use.
+--
+-- Match on the class and not the title: a browser window is mapped as
+-- "Untitled" and only becomes "… | Microsoft Teams" afterwards, by which time
+-- the rule has already been evaluated.
 hl.workspace_rule({ workspace = "1", monitor = "eDP-1" })
-o.window("^chrome-teams", { workspace = "1" })
+o.window("^(chrome-teams|teams-for-linux)", { workspace = "1" })
